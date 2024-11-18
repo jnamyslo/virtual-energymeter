@@ -1,65 +1,107 @@
-# Energy Monitoring with InfluxDB
+# Energy Monitoring with InfluxDB (Dockerized)
 
 ## Overview
-This Python script collects power consumption data from an InfluxDB database, processes it, and stores the cumulative energy consumption back into the database. The script is designed to monitor two metrics:
-1. **Feed-in energy** (`feed`)
-2. **Photovoltaic (PV) energy** (`pv`)
-
-The script calculates the total energy consumed over time using the trapezoidal rule and stores the results back in the InfluxDB bucket for further analysis or visualization.
+This project is a Python script designed to monitor energy consumption using data from an InfluxDB database. It calculates cumulative energy usage for **feed-in energy** (`feed`) and **photovoltaic (PV) energy** (`pv`) using the trapezoidal rule, and stores the results back into InfluxDB. The entire application is packaged to run as a Docker container, making it easy to deploy and run on any system with Docker installed.
 
 ## Prerequisites
-Before running this script, ensure that you have:
-- Python installed (version 3.8 or above recommended)
-- The `influxdb-client` Python package installed
-- An InfluxDB instance running and accessible
-- Appropriate access credentials (bucket, organization, token, and URL)
+Before running this project, ensure you have the following installed:
+- **Docker** (version 20.10 or later recommended)
+- An **InfluxDB** instance running and accessible
+- Python dependencies listed in the `requirements.txt` file
 
-### Required Python Package
-To install the required `influxdb-client` package, run:
+## Project Structure
+```
+├── Dockerfile
+├── energy_meter.py
+├── requirements.txt
+└── README.md
+```
 
-```bash
-pip install influxdb-client
+### `Dockerfile`
+This file is used to build a Docker image for the Python application.
+
+```dockerfile
+# Use an official Python runtime as a parent image
+FROM python:3.9-slim
+
+# Set the working directory in the container
+WORKDIR /usr/src/app
+
+# Copy the current directory contents into the container at /usr/src/app
+COPY . .
+
+# Install required Python packages
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Run the script when the container launches
+CMD ["python", "./energy_meter.py"]
+```
+
+### `requirements.txt`
+```txt
+influxdb-client
+numpy
 ```
 
 ## Configuration
-In the script, you will need to configure the following parameters with your InfluxDB credentials:
+Before building and running the Docker container, you need to configure your **InfluxDB** connection details in the `energy_meter.py` file:
 
 ```python
 bucket = "BUCKETNAME"
 org = "ORGNAME"
 token = "your_influxdb_token"
-url = "your-url-to-influxDB"
+url = "your-url-to-influxdb"
 ```
 
-Make sure to replace these values with your actual InfluxDB settings.
+Replace these values with your actual **bucket**, **organization**, **token**, and **InfluxDB URL**.
 
-## How It Works
-1. **Initialization**:
-   - The script connects to your InfluxDB instance using the provided credentials.
-   - It initializes variables for storing the total energy consumption (`feed` and `pv`) and keeps track of the previous wattage values and timestamps.
+## Building and Running the Docker Container
 
-2. **Reading Wattage Data**:
-   - The function `read_average_wattage()` queries the InfluxDB database for the average wattage over the past 120 seconds for the specified measurement and field.
-   - It returns the average wattage and the most recent timestamp.
-
-3. **Processing Energy Consumption**:
-   - The `process_energy()` function calculates the energy consumed using the trapezoidal rule:
-     - It calculates the time difference between the current and previous timestamp.
-     - It uses the previous and current wattage readings to estimate energy consumption over that interval.
-   - The cumulative energy is stored in the `total_energy` dictionary and written back to InfluxDB.
-
-4. **Continuous Monitoring**:
-   - The script continuously monitors the energy usage, updating the total consumption every 30 seconds.
-
-## Usage
-To run the script, simply execute:
+### Step 1: Build the Docker Image
+Open a terminal in the project directory and run the following command:
 
 ```bash
-python energy_monitor.py
+docker build -t energy-monitor .
 ```
 
-The script will print real-time updates to the console, such as:
+This will build a Docker image named `energy-monitor`.
 
+### Step 2: Run the Docker Container
+After building the image, run the container with:
+
+```bash
+docker run -d --name energy-monitor-container energy-monitor
+```
+
+The `-d` flag runs the container in detached mode.
+
+### Step 3: View Logs
+To check if the script is running correctly, you can view the logs:
+
+```bash
+docker logs -f energy-monitor-container
+```
+
+### Step 4: Stopping the Container
+To stop and remove the running container:
+
+```bash
+docker stop energy-monitor-container
+docker rm energy-monitor-container
+```
+
+## How It Works
+The script performs the following tasks:
+
+1. **Connects to InfluxDB** using the provided credentials.
+2. **Reads average wattage data** for the specified measurements (`feed` and `pv`) from InfluxDB.
+3. **Calculates total energy consumption** using the trapezoidal rule:
+   - Uses the current and previous wattage readings to estimate energy consumed during the interval.
+   - Updates the total energy values for each metric (`feed` and `pv`).
+4. **Writes the updated total energy** back to the InfluxDB bucket.
+5. **Repeats the process every 30 seconds**.
+
+### Console Output Example
 ```
 Total energy for feed is: 92.642389 kWh
 Current wattage for feed is: 1500.00 W
@@ -67,23 +109,35 @@ Total energy for pv is: 190.316559 kWh
 Current wattage for pv is: 3500.00 W
 ```
 
-## Example Output
-- **Feed-in Energy**: Displays the total feed-in energy (kWh) and current feed-in wattage (W).
-- **PV Energy**: Displays the total PV energy (kWh) and current PV wattage (W).
+## Environment Variables (Optional)
+For added security, you can configure your InfluxDB credentials using environment variables in Docker:
 
-## Notes
-- The script uses a 30-second interval (`time.sleep(30)`) for updating data. You can adjust this interval to suit your needs.
-- Ensure your InfluxDB instance is accessible and that the measurements and fields specified in the script match your database schema.
-- Be mindful of your InfluxDB token security—avoid sharing sensitive credentials in public repositories.
+```bash
+docker run -d \
+  -e INFLUX_BUCKET=BUCKETNAME \
+  -e INFLUX_ORG=ORGNAME \
+  -e INFLUX_TOKEN=your_influxdb_token \
+  -e INFLUX_URL=your-url-to-influxdb \
+  --name energy-monitor-container energy-monitor
+```
+
+In your `energy_meter.py` script, update the configuration to read from environment variables:
+
+```python
+import os
+
+bucket = os.getenv("INFLUX_BUCKET")
+org = os.getenv("INFLUX_ORG")
+token = os.getenv("INFLUX_TOKEN")
+url = os.getenv("INFLUX_URL")
+```
 
 ## Future Improvements
-- Add error handling for network failures or InfluxDB connection issues.
-- Implement logging instead of print statements for better monitoring.
-- Optimize the query interval to reduce database load if necessary.
+- Add more robust error handling for database connectivity issues.
+- Implement logging to a file for better monitoring.
+- Optimize data querying intervals for better performance.
 
 ## License
 This project is licensed under the MIT License.
 
----
-
-Feel free to modify the script or extend its functionality to suit your specific needs.
+Feel free to customize and extend the functionality of this project to fit your needs!
