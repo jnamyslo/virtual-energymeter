@@ -1,4 +1,6 @@
-4. Build and run the Docker container
+Make sure to adjust everything marked with "#ADJUST" in the .py file!
+
+Build and run the Docker container
 
 
 Build the Docker image:
